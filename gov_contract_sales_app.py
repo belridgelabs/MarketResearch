@@ -10,12 +10,13 @@ import openai
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def fetch_duckduckgo_results(query: str, max_results: int = 5) -> List[str]:
-    """Fetch search result links from DuckDuckGo."""
-    search_url = "https://duckduckgo.com/html/"
-    params = {"q": query}
+def fetch_google_results(query: str, max_results: int = 5) -> List[str]:
+    """Fetch search result links from Google."""
+    search_url = "https://www.google.com/search"
+    params = {"q": query, "hl": "en"}
+    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.post(search_url, data=params, timeout=10)
+        response = requests.get(search_url, params=params, headers=headers, timeout=10)
         response.raise_for_status()
     except Exception as exc:
         logger.error("Search request failed: %s", exc)
@@ -23,9 +24,9 @@ def fetch_duckduckgo_results(query: str, max_results: int = 5) -> List[str]:
 
     soup = BeautifulSoup(response.text, "html.parser")
     links = []
-    for a in soup.select("a.result__a"):
+    for a in soup.select("div.yuRUbf > a"):
         href = a.get("href")
-        if href and not href.startswith("/"):
+        if href and href.startswith("http"):
             links.append(href)
         if len(links) >= max_results:
             break
@@ -50,7 +51,7 @@ def scrape_page_text(url: str) -> str:
 def gather_information(name: str, agency: str) -> str:
     query = f"{name} {agency}"
     logger.info("Searching for information on %s", query)
-    urls = fetch_duckduckgo_results(query)
+    urls = fetch_google_results(query)
     logger.info("Found %d urls", len(urls))
     texts = []
     for url in urls:
