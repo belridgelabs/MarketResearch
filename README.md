@@ -30,3 +30,4 @@ python gov_contract_sales_app.py "Jane Doe" "Department of Energy"
 ```
 
 The program will search Google, scrape the top results, and ask the OpenAI API to generate a one-pager summarizing what you should know before the call.
+
