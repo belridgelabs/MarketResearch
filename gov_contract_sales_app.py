@@ -151,6 +151,9 @@ def search_with_perplexity(query: str) -> str:
         search_results = ""
         if "search_results" in result:
             citations = result["search_results"]
+            logger.info("Found %d citations from search results", len(citations))
+            for citation in citations:
+                logger.info("Citation: %s", citation)
             if citations:
                 search_results = "\n\nSearch Results Sources:\n" + "\n".join([f"- {citation}" for citation in citations])
         
@@ -196,7 +199,7 @@ def generate_summary(context: str, name: str, agency: str) -> str:
         "Format the response as a numbered list (e.g., 1., 2., etc.) of 7-10 key points.\n"
         "Ensure each point is on a new line and separated by a blank line for clear readability.\n"
         "Include details on their technical background, past contracts, and specific projects if available.\n"
-        "For each numbered point, provide a quote from the source that proves that point.\n"
+        "For each numbered point, link the source that proves it (link it in markdown).\n"
         "Do not use language that is unclear or ambigious (ex. 'likely').\n"
         "Shy away from overly complicated language. Be direct and concise, with information that would actually be valuable for sales (not fluff).\n"
         "Avoid broad statements or givens that are too general.\n"
