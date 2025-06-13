@@ -81,7 +81,14 @@ This will create a `sample_sales_report.pdf` with sample data.
 ## API Requirements
 
 - **OpenAI API Key**: For AI-powered research and summary generation
-- **Perplexity API Key**: For enhanced search capabilities with citations
+- **Perplexity API Key**: For enhanced search capabilities with search results
+
+### Perplexity Search Results Format
+Perplexity responses now include a `search_results` array with objects containing:
+- `title`: page title
+- `url`: link to the result
+- `date`: publication date
+These links are appended beneath the scraped content for full traceability.
 
 ## File Structure
 
