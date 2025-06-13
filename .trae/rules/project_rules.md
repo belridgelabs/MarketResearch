@@ -1,0 +1,1 @@
+App Description: Python app for Government Contracting Sales that takes in an individual's name and their agency, then scrapes online search results, their linkedin, as well as FedScoop and OrangeSlices to develop a one-pager on what to know before the call using an LLM (OpenAI API).
