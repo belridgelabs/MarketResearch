@@ -4,10 +4,13 @@ import os
 import urllib.parse
 from typing import List
 from dotenv import load_dotenv
+import markdown
+import html
 
 import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
+from playwright.sync_api import sync_playwright
 
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -95,10 +98,10 @@ def search_with_openai(query: str) -> str:
             messages=[
                 {
                     "role": "user",
-                    "content": f"Search for and provide relevant information about: {query}. Focus on professional background, recent activities, government contracting experience, and any publicly available information that would be useful for a sales call preparation."
+                    "content": f"Search for and provide relevant information about: {query}. Focus on professional background, recent activities, government contracting experience, and any publicly available information that would be useful for a sales call preparation. Provide specifics about technical information, past contracts, and any relevant technologies or projects they have been involved with."
                 }
             ],
-            max_tokens=500,
+            max_tokens=700,
             temperature=0.3
         )
         return response.choices[0].message.content
@@ -123,7 +126,7 @@ def search_with_perplexity(query: str) -> str:
                 },
                 {
                     "role": "user",
-                    "content": f"Search for and provide relevant information about: {query}. Focus on professional background, recent activities, government contracting experience, and any publicly available information that would be useful for a sales call preparation."
+                    "content": f"Search for and provide relevant information about: {query}. Focus on professional background, recent activities, government contracting experience, and any publicly available information that would be useful for a sales call preparation. Provide specifics about technical information as well as past contracts."
                 }
             ],
             "max_tokens": 500,
@@ -190,30 +193,98 @@ def generate_summary(context: str, name: str, agency: str) -> str:
     prompt = (
         f"Using the following scraped information about {name} from {agency},\n"
         "craft a concise one-pager summarizing what a salesperson should know before a call.\n"
-        "Format the response as a clean, non-repetitive list of 5-7 key points.\n"
-        "For each bullet point, provide a quote from the source that proves that point.\n"
+        "Format the response as a numbered list (e.g., 1., 2., etc.) of 7-10 key points.\n"
+        "Ensure each point is on a new line and separated by a blank line for clear readability.\n"
+        "Include details on their technical background, past contracts, and specific projects if available.\n"
+        "For each numbered point, provide a quote from the source that proves that point.\n"
         "Do not use language that is unclear or ambigious (ex. 'likely').\n"
         "Shy away from overly complicated language. Be direct and concise, with information that would actually be valuable for sales (not fluff).\n"
+        "Avoid broad statements or givens that are too general.\n"
         "Information:\n" + context
     )
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
+            max_tokens=500,
             temperature=0.7
         )
         # Process the response to remove any potential duplicates
         content = response.choices[0].message.content
-        lines = content.split('\n')
-        unique_lines = []
-        for line in lines:
-            line = line.strip()
-            if line and line not in unique_lines:
-                unique_lines.append(line)
-        return '\n'.join(unique_lines)
+        # Process the response to remove any potential duplicates and ensure proper line breaks
+        # The LLM is now instructed to provide numbered points with blank lines in between.
+        # We will preserve these as much as possible for markdown rendering.
+        return content
     except Exception as exc:
         logger.error("OpenAI request failed: %s", exc)
+        return ""
+
+def generate_pdf_report(summary: str, name: str, agency: str, output_path: str = "sales_report.pdf") -> str:
+    """Generate a formatted PDF report using Playwright and Tailwind CSS."""
+    
+    import markdown
+    # Convert markdown summary to HTML
+    summary_html = markdown.markdown(summary, extensions=['extra'])
+    
+    tailwind_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Sales Call Preparation Report</title>
+</head>
+<body class="bg-white p-8">
+  <div class="max-w-4xl mx-auto">
+    <div class="border-b-4 border-blue-600 pb-4 mb-8">
+      <h1 class="text-4xl font-bold text-blue-600 mb-2">Sales Call Preparation</h1>
+      <h2 class="text-2xl font-semibold text-gray-800">{html.escape(name)} at {html.escape(agency)}</h2>
+      <p class="text-sm text-gray-500 mt-2">Generated on {__import__('datetime').datetime.now().strftime('%B %d, %Y at %I:%M %p')}</p>
+    </div>
+    
+    <div class="bg-gray-50 rounded-lg p-6 mb-8">
+      <h3 class="text-xl font-semibold text-gray-800 mb-4">Key Information</h3>
+      <div class="space-y-2">
+        {summary_html}
+      </div>
+    </div>
+    
+    <div class="border-t pt-6">
+      <p class="text-sm text-gray-500 text-center">Generated via Government Contract Sales Research Tool</p>
+      <p class="text-xs text-gray-400 text-center mt-1">Powered by Playwright + Tailwind CSS</p>
+    </div>
+  </div>
+</body>
+</html>
+"""
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.set_content(tailwind_html)
+            
+            # Wait for Tailwind to load
+            page.wait_for_timeout(2000)
+            
+            page.pdf(
+                path=output_path, 
+                format="A4", 
+                print_background=True,
+                margin={
+                    "top": "1in",
+                    "bottom": "1in", 
+                    "left": "0.5in",
+                    "right": "0.5in"
+                }
+            )
+            browser.close()
+            
+        logger.info(f"PDF report generated successfully: {output_path}")
+        return output_path
+        
+    except Exception as exc:
+        logger.error(f"Failed to generate PDF: {exc}")
         return ""
 
 def main():
@@ -232,26 +303,26 @@ def main():
     
     summary = generate_summary(context, args.name, agency)
     
-    # # Extract key points from the summary
-    # points = []
-    # for line in summary.split('\n'):
-    #     line = line.strip()
-    #     if not line:
-    #         continue
+    # Extract key points from the summary
+    points = []
+    for line in summary.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
             
-    #     # Check if line is a numbered point or bullet point
-    #     if (line[0].isdigit() and '.' in line[:3]) or line[0] in ['•', '-', '*']:
-    #         # Extract content without the numbering/bullet
-    #         if line[0].isdigit() and '.' in line[:3]:
-    #             content = line.split('.', 1)[1].strip()
-    #         else:
-    #             content = line[1:].strip()
+        # Check if line is a numbered point or bullet point
+        if (line[0].isdigit() and '.' in line[:3]) or line[0] in ['•', '-', '*']:
+            # Extract content without the numbering/bullet
+            if line[0].isdigit() and '.' in line[:3]:
+                content = line.split('.', 1)[1].strip()
+            else:
+                content = line[1:].strip()
                 
-    #         # Only add if not a duplicate
-    #         if content and content.lower() not in [p.lower() for p in points]:
-    #             points.append(content)
-    #     elif line not in points:  # For non-bullet text
-    #         points.append(line)
+            # Only add if not a duplicate
+            if content and content.lower() not in [p.lower() for p in points]:
+                points.append(content)
+        elif line not in points:  # For non-bullet text
+            points.append(line)
     
     # Print formatted output
     print(f"\n=== SALES CALL PREPARATION: {args.name} at {agency} ===\n")
@@ -261,6 +332,17 @@ def main():
             print(f"{i}. {point}")
     else:
         print("No specific information found. Consider researching more about this person.")
+    
+    # Generate PDF report
+    if summary:
+        pdf_filename = f"sales_report_{args.name.replace(' ', '_')}_{agency.replace(' ', '_')}.pdf"
+        pdf_path = generate_pdf_report(summary, args.name, agency, pdf_filename)
+        if pdf_path:
+            print(f"\n📄 PDF report generated: {pdf_path}")
+        else:
+            print("\n❌ Failed to generate PDF report")
+    else:
+        print("\n⚠️  No summary available to generate PDF")
 
 if __name__ == "__main__":
     main()
