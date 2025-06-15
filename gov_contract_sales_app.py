@@ -118,7 +118,7 @@ def search_with_perplexity(query: str) -> str:
         }
         
         data = {
-            "model": "llama-3.1-sonar-small-128k-online",
+            "model": "sonar",
             "messages": [
                 {
                     "role": "system",
@@ -129,10 +129,70 @@ def search_with_perplexity(query: str) -> str:
                     "content": f"Search for and provide relevant information about: {query}. Focus on professional background, recent activities, government contracting experience, and any publicly available information that would be useful for a sales call preparation. Provide specifics about technical information as well as past contracts."
                 }
             ],
-            "max_tokens": 500,
+            "max_tokens": 2000,
             "temperature": 0.3,
             "return_citations": True,
-            "search_domain_filter": ["perplexity.ai"],
+            # "search_domain_filter": ["perplexity.ai"],
+            "return_images": False,
+            # "return_sources": True
+        }
+        
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        content = result["choices"][0]["message"]["content"]
+
+        # Extract search results if available
+        search_results_text = ""
+        # print("result: ", result)
+        if "search_results" in result:
+            search_results = result["search_results"]
+            search_results_text = "\n".join(
+                f"[{result['title']}]({result['url']})" for result in search_results
+            )
+
+        return content + search_results_text
+
+    except Exception as exc:
+        logger.error("Perplexity search request failed: %s", exc)
+        return ""
+
+def extract_adjacent_personnel(context: str, name: str, agency: str) -> str:
+    """Identify managers or collaborators mentioned in the context using Perplexity API."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {perplexity_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        query = (
+            f"Based on the provided context, dive deeper into adjacent individuals and coworkers."
+            f"Search for managers, supervisors, collaborators, or support staff "
+            f"associated with {name} at {agency}. Focus on organizational structure, "
+            f"team members, and professional relationships. Provide names and roles if available."
+        )
+        
+        data = {
+            "model": "sonar",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a detective that finds related coworkers and connections."
+                },
+                {
+                    "role": "user",
+                    "content": f"Search for and provide relevant information about: {query}. Also analyze this context: {context}"
+                }
+            ],
+            "max_tokens": 200,
+            "temperature": 0.5,
+            "return_citations": True,
             "return_images": False
         }
         
@@ -151,57 +211,70 @@ def search_with_perplexity(query: str) -> str:
         search_results_text = ""
         if "search_results" in result:
             search_results = result["search_results"]
-            if isinstance(search_results, list) and search_results:
-                lines = []
-                for entry in search_results:
-                    title = entry.get("title", "")
-                    url = entry.get("url", "")
-                    date = entry.get("date", "")
-                    line = f"- {title} ({date}): {url}" if title or date else f"- {url}"
-                    lines.append(line)
-                search_results_text = "\n\nSearch Results Sources:\n" + "\n".join(lines)
+            search_results_text = "\n".join(
+                f"[{result['title']}]({result['url']})" for result in search_results
+            )
 
         return content + search_results_text
-
-    except Exception as exc:
-        logger.error("Perplexity search request failed: %s", exc)
-        return ""
-
-def extract_adjacent_personnel(context: str, name: str, agency: str) -> str:
-    """Identify managers or collaborators mentioned in the context."""
-    try:
-        prompt = (
-            f"From the following text about {name} at {agency}, list any managers," 
-            " supervisors, collaborators, or support staff mentioned. "
-            "Provide their names and roles if available."
-            "\nText:\n" + context
-        )
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=150,
-            temperature=0.3,
-        )
-        return response.choices[0].message.content
+        
     except Exception as exc:
         logger.error("Adjacent personnel extraction failed: %s", exc)
         return ""
 
-def tag_expertise(context: str, name: str) -> str:
-    """Extract the person's key technical expertise from the context."""
+def tag_expertise(context: str, name: str, agency: str) -> str:
+    """Extract the person's key technical expertise using Perplexity API."""
     try:
-        prompt = (
-            f"Based on the following information about {name}, identify any specific"
-            " technologies, systems experience, or procurement expertise they possess."
-            "\nText:\n" + context
+        headers = {
+            "Authorization": f"Bearer {perplexity_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        query = (
+            f"Based on the provided context, dive deeper into expertise."
+            f"Search for technical expertise, skills, technologies, systems experience, "
+            f"and procurement expertise of {name} at {agency}. Focus on specific technologies, "
+            f"certifications, technical background, and specialized knowledge areas."
         )
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=150,
-            temperature=0.3,
+        
+        data = {
+            "model": "sonar",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a technical researcher that provides relevant technical and professional expertise information abotu a given individual."
+                },
+                {
+                    "role": "user",
+                    "content": f"Search for and provide relevant information about: {query}. Also analyze this context: {context}"
+                }
+            ],
+            "max_tokens": 200,
+            "temperature": 0.5,
+            "return_citations": True,
+            "return_images": False
+        }
+        
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
         )
-        return response.choices[0].message.content
+        response.raise_for_status()
+        
+        result = response.json()
+        content = result["choices"][0]["message"]["content"]
+
+        # Extract search results if available
+        search_results_text = ""
+        if "search_results" in result:
+            search_results = result["search_results"]
+            search_results_text = "\n".join(
+                f"[{result['title']}]({result['url']})" for result in search_results
+            )
+
+        return content + search_results_text
+        
     except Exception as exc:
         logger.error("Expertise tagging failed: %s", exc)
         return ""
@@ -228,17 +301,20 @@ def gather_information(name: str, agency: str) -> str:
     
     # Stage 3: Perplexity search with search results
     logger.info("Using Perplexity search for additional context with search results")
+    perplexity_context = ""
     perplexity_context = search_with_perplexity(query)
 
     # Extract additional structured information using dedicated roles
+    logger.info("Extracting additional structured information")
     adjacent_info = extract_adjacent_personnel(perplexity_context, name, agency)
-    expertise_info = tag_expertise(perplexity_context, name)
+    expertise_info = tag_expertise(perplexity_context, name, agency)
 
     # Combine all sources of information
     combined_context = (
         f"Web Search Results:\n{web_context}\n\nOpenAI Research:\n{openai_context}"
         f"\n\nPerplexity Search Results:\n{perplexity_context}\n\nAdjacent Personnel:\n{adjacent_info}\n\nTechnical Expertise:\n{expertise_info}"
     )
+    # print(combined_context)
     return combined_context
 
 def generate_summary(context: str, name: str, agency: str) -> str:
@@ -247,15 +323,13 @@ def generate_summary(context: str, name: str, agency: str) -> str:
         raise EnvironmentError("OPENAI_API_KEY not set")
     prompt = (
         f"Using the following scraped information about {name} from {agency},\n"
-        "craft a concise one-pager summarizing what a salesperson should know before a call.\n"
-        "Format the response as a numbered list (e.g., 1., 2., etc.) of 7-10 key points.\n"
+        "craft a document summarizing what a salesperson should know before a call.\n"
         "Ensure each point is on a new line and separated by a blank line for clear readability.\n"
         "Include details on their technical background, past contracts, and specific projects if available.\n"
-        "For each numbered point, provide a short quote from the source that proves that point.\n"
-        "Place the source link immediately below the quote using the format 'Source: <URL>'.\n"
+        "Place the source link with the Title immediately below the related detail using markdown formatting for hyperlinks. Italicize links.\n"
         "Do not use language that is unclear or ambigious (ex. 'likely').\n"
         "Shy away from overly complicated language. Be direct and concise, with information that would actually be valuable for sales (not fluff).\n"
-        "Prioritize actionable insights and distinguishing traits about the individual, including any relevant systems experience, AI tools, or procurement expertise.\n"
+        "Prioritize actionable insights and distinguishing traits about the individual.\n"
         "Mention managers, collaborators, or support staff when referenced in the sources.\n"
         "Avoid broad statements or givens that are too general.\n"
         "Information:\n" + context
@@ -264,8 +338,8 @@ def generate_summary(context: str, name: str, agency: str) -> str:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=500,
-            temperature=0.7
+            max_tokens=1000,
+            temperature=0.6
         )
         # Process the response to remove any potential duplicates
         content = response.choices[0].message.content
@@ -359,6 +433,7 @@ def main():
     if not context:
         logger.warning("No context gathered; summary may be empty")
     
+    summary= ""
     summary = generate_summary(context, args.name, agency)
     
     # Extract key points from the summary
@@ -393,7 +468,7 @@ def main():
     
     # Generate PDF report
     if summary:
-        pdf_filename = f"sales_report_{args.name.replace(' ', '_')}_{agency.replace(' ', '_')}.pdf"
+        pdf_filename = f"{args.name.replace(' ', '_')}_sales_report.pdf"
         pdf_path = generate_pdf_report(summary, args.name, agency, pdf_filename)
         if pdf_path:
             print(f"\n📄 PDF report generated: {pdf_path}")
