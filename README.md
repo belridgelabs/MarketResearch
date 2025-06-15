@@ -6,6 +6,10 @@ A Python application that generates comprehensive one-pagers for government cont
 
 - **Multi-source Research**: Combines data from DuckDuckGo search, OpenAI, and Perplexity AI
 - **Government Focus**: Specialized research for federal agencies and contractors
+- **AI-Powered Review System**: 
+  - **Review Agent**: Uses Perplexity's Sonar Pro to fact-check and evaluate summary completeness
+  - **Writer Agent**: Iteratively improves summaries based on review feedback
+  - **Quality Assurance**: Ensures summaries are factually accurate and comprehensive enough for sales calls
 - **PDF Generation**: Creates professional, formatted PDF reports using Playwright and Tailwind CSS
 - **Duplicate Detection**: Automatically removes redundant information
 - **Professional Formatting**: Clean, readable output optimized for sales preparation

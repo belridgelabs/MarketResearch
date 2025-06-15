@@ -318,9 +318,6 @@ def gather_information(name: str, agency: str) -> str:
     return combined_context
 
 def generate_summary(context: str, name: str, agency: str) -> str:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("OPENAI_API_KEY not set")
     prompt = (
         f"Using the following scraped information about {name} from {agency},\n"
         "craft a document summarizing what a salesperson should know before a call.\n"
@@ -350,6 +347,129 @@ def generate_summary(context: str, name: str, agency: str) -> str:
     except Exception as exc:
         logger.error("OpenAI request failed: %s", exc)
         return ""
+
+def review_agent(summary: str, name: str, agency: str) -> dict:
+    """Review Agent using Perplexity's Sonar Pro to evaluate summary accuracy and completeness."""
+    
+    review_prompt = (
+        f"You are a fact-checking expert reviewing a sales preparation document about {name} from {agency}. "
+        f"Evaluate the following summary for factual accuracy and completeness:\n\n{summary}\n\n"
+        "Please assess:\n"
+        "1. Are all statements factually correct?\n"
+        "2. Is there critical information missing that would help a salesperson prepare for a call?\n"
+        "3. Is this document sufficient for someone who doesn't know the person to go toe-to-toe in a call?\n\n"
+        "Respond with:\n"
+        "- NEEDS_IMPROVEMENT: true/false\n"
+        "- FEEDBACK: Specific areas that need improvement or missing information\n"
+        "- MISSING_INFO: What specific information should be researched and added"
+    )
+    
+    try:
+        headers = {
+            "Authorization": f"Bearer {perplexity_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "llama-3.1-sonar-large-128k-online",
+            "messages": [
+                {"role": "user", "content": review_prompt}
+            ],
+            "max_tokens": 1000,
+            "temperature": 0.3
+        }
+        
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        review_content = response.json()["choices"][0]["message"]["content"]
+        
+        # Parse the response
+        needs_improvement = "NEEDS_IMPROVEMENT: true" in review_content.upper()
+        feedback_lines = review_content.split("\n")
+        feedback = "\n".join([line for line in feedback_lines if "FEEDBACK:" in line.upper() or "MISSING_INFO:" in line.upper()])
+        
+        return {
+            "needs_improvement": needs_improvement,
+            "feedback": feedback,
+            "full_review": review_content
+        }
+        
+    except Exception as exc:
+        logger.error(f"Perplexity API request failed: {exc}")
+        return {"needs_improvement": False, "feedback": "Review failed"}
+
+def writer_agent(original_summary: str, feedback: str, name: str, agency: str, context: str) -> str:
+    """Writer Agent that improves the summary based on review feedback."""
+    
+    improvement_prompt = (
+        f"You are an expert sales preparation writer. You need to improve the following summary about {name} from {agency} "
+        f"based on the review feedback provided.\n\n"
+        f"ORIGINAL SUMMARY:\n{original_summary}\n\n"
+        f"REVIEW FEEDBACK:\n{feedback}\n\n"
+        f"ORIGINAL CONTEXT (for reference):\n{context}\n\n"
+        "Please rewrite and expand the summary to address the feedback. "
+        "Ensure each point is on a new line and separated by a blank line for clear readability. "
+        "Include details on their technical background, past contracts, and specific projects if available. "
+        "Place the source link with the Title immediately below the related detail using markdown formatting for hyperlinks. Italicize links. "
+        "Do not use language that is unclear or ambiguous (ex. 'likely'). "
+        "Shy away from overly complicated language. Be direct and concise, with information that would actually be valuable for sales (not fluff). "
+        "Prioritize actionable insights and distinguishing traits about the individual. "
+        "Mention managers, collaborators, or support staff when referenced in the sources. "
+        "Avoid broad statements or givens that are too general."
+    )
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": improvement_prompt}],
+            max_tokens=1500,
+            temperature=0.6
+        )
+        return response.choices[0].message.content
+    except Exception as exc:
+        logger.error(f"Writer agent failed: {exc}")
+        return original_summary
+
+def review_and_improve_summary(initial_summary: str, name: str, agency: str, context: str, max_iterations: int = 3) -> str:
+    """Orchestrate the review and improvement process between Review Agent and Writer Agent."""
+    current_summary = initial_summary
+    iteration = 0
+    
+    logger.info("Starting review and improvement process...")
+    
+    while iteration < max_iterations:
+        iteration += 1
+        logger.info(f"Review iteration {iteration}/{max_iterations}")
+        
+        # Review Agent evaluates the current summary
+        review_result = review_agent(current_summary, name, agency)
+        
+        if not review_result["needs_improvement"]:
+            logger.info("Review Agent satisfied with summary quality")
+            break
+        
+        logger.info(f"Review Agent feedback: {review_result['feedback']}")
+        
+        # Writer Agent improves the summary
+        improved_summary = writer_agent(current_summary, review_result["feedback"], name, agency, context)
+        
+        if improved_summary == current_summary:
+            logger.warning("Writer Agent did not make changes, stopping iteration")
+            break
+            
+        current_summary = improved_summary
+        logger.info(f"Summary improved in iteration {iteration}")
+    
+    if iteration >= max_iterations:
+        logger.warning(f"Reached maximum iterations ({max_iterations}) without full satisfaction")
+    
+    return current_summary
 
 def generate_pdf_report(summary: str, name: str, agency: str, output_path: str = "sales_report.pdf") -> str:
     """Generate a formatted PDF report using Playwright and Tailwind CSS."""
@@ -436,9 +556,13 @@ def main():
     summary= ""
     summary = generate_summary(context, args.name, agency)
     
-    # Extract key points from the summary
+    # Review and improve summary using agents
+    final_summary = review_and_improve_summary(summary, args.name, agency, context)
+    # final_summary = summary
+    
+    # Extract key points from the final summary
     points = []
-    for line in summary.split('\n'):
+    for line in final_summary.split('\n'):
         line = line.strip()
         if not line:
             continue
@@ -467,9 +591,9 @@ def main():
         print("No specific information found. Consider researching more about this person.")
     
     # Generate PDF report
-    if summary:
+    if final_summary:
         pdf_filename = f"{args.name.replace(' ', '_')}_sales_report.pdf"
-        pdf_path = generate_pdf_report(summary, args.name, agency, pdf_filename)
+        pdf_path = generate_pdf_report(final_summary, args.name, agency, pdf_filename)
         if pdf_path:
             print(f"\n📄 PDF report generated: {pdf_path}")
         else:

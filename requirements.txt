@@ -4,3 +4,4 @@ openai
 playwright
 python-dotenv
 Markdown
+requests
