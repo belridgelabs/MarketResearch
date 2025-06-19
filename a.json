@@ -1,0 +1,58 @@
+{
+    "toptier_code": "097",
+    "fiscal_year": 2025,
+    "results": [
+        {
+            "name": "Defense-wide",
+            "id": "defense-wide",
+            "total_obligations": 436142931560.02,
+            "total_outlays": 429518860031.44,
+            "total_budgetary_resources": 878550283205.96
+        },
+        {
+            "name": "Navy, Marine Corps", 
+            "id": "navy-marine-corps",
+            "total_obligations": 154272842231.74,
+            "total_outlays": 144997863369.14,
+            "total_budgetary_resources": 354037089276.84
+        },
+        {
+            "name": "Air Force",
+            "id": "air-force", 
+            "total_obligations": 157726470669.54,
+            "total_outlays": 152835377642.22,
+            "total_budgetary_resources": 345297061209.67
+        },
+        {
+            "name": "Army",
+            "id": "army",
+            "total_obligations": 124749237936.2,
+            "total_outlays": 128818644698.4,
+            "total_budgetary_resources": 315985275416.36
+        },
+        {
+            "name": "International Security Assistance",
+            "id": "international-security-assistance",
+            "total_obligations": 1048829.13,
+            "total_outlays": 1718060.11,
+            "total_budgetary_resources": 9864811954.0
+        },
+        {
+            "name": "Military Sales Program",
+            "id": "military-sales-program",
+            "total_obligations": null,
+            "total_outlays": null,
+            "total_budgetary_resources": 238254340.93
+        }
+    ],
+    "messages": [],
+    "page_metadata": {
+        "page": 1,
+        "total": 6,
+        "limit": 10,
+        "next": null,
+        "previous": null,
+        "hasNext": false,
+        "hasPrevious": false
+    }
+}
