@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright
 
 # Import USASpending processor
 from BetterUSASpending import generate_usa_spending_analysis
+from linkedin_agents import LinkedinProfileAgent, LinkedinEndorsementAgent
 # =============================================================================
 # CONFIGURATION AND SETUP
 # =============================================================================
@@ -328,7 +329,7 @@ def gather_information(name: str, agency: str) -> str:
 
     # OpenAI search for additional information (currently disabled)
     logger.info("Using OpenAI search for additional context")
-    openai_context = search_with_openai(query)
+    # openai_context = search_with_openai(query)
     openai_context = ""
 
     # Perplexity search with search results
@@ -347,7 +348,7 @@ def gather_information(name: str, agency: str) -> str:
     # Combine all sources of information
     combined_context = (
         f"\nWeb Search Results:\n{perplexity_context}\n"
-        f"OpenAI Research:\n{openai_context}\n\n"
+        # f"OpenAI Research:\n{openai_context}\n\n"
         f"Adjacent Personnel:\n{adjacent_info}\n"
         f"Technical Expertise:\n{expertise_info}\n"
         # f"Personal Information:\n{personal_info}\n"
@@ -479,7 +480,7 @@ def writer_agent(original_summary: str, feedback: str, name: str, agency: str, c
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": improvement_prompt}],
-            max_tokens=4000,
+            max_tokens=2000,
             temperature=0.7
         )
         return response.choices[0].message.content
@@ -532,7 +533,7 @@ def generate_pdf_report(summary: str, name: str, agency: str, output_path: str =
     """Generate a formatted PDF report using Playwright and Tailwind CSS.
     
     Args:
-        summary: Main summary content
+        summary: Main summary content (now includes LinkedIn data)
         name: Person's name
         agency: Agency name
         output_path: Path for output PDF
@@ -672,12 +673,37 @@ def main():
     usaspending = ""
     usaspending = generate_usa_spending_analysis(agency, args.bureau)
 
-    original_pdf = generate_report_file(summary, args.name, agency, "original", usaspending)
+    # Process LinkedIn profile and endorsements
+    profile_agent = LinkedinProfileAgent("extracted_text/Profile.txt", args.name, agency)
+    profile_summary = profile_agent.process_profile()
+
+    endorsement_agent = LinkedinEndorsementAgent([
+        "extracted_text/skills.txt",
+        "extracted_text/skills-2.txt",
+        "extracted_text/skills-3.txt"
+    ], args.name, agency)
+    endorsement_summary = endorsement_agent.process_endorsements()
+
+    full_report_content = f"{summary}\n\n{profile_summary}\n\n{endorsement_summary}"
+
+    report_path = generate_report_file(full_report_content, args.name, agency, "original", usaspending)
 
     final_summary = review_and_improve_summary(
         summary, args.name, agency, context)
-    # final_summary = summary
 
+    # Combine all summaries for the final report
+    full_report_content = f"{final_summary}\n\n{profile_summary}\n\n{endorsement_summary}"
+
+    # Generate the final report file
+    report_path = generate_report_file(full_report_content, args.name, agency, "final", usaspending)
+
+    if report_path:
+        print(f"\nReport saved to: {report_path}")
+    else:
+        print("\nFailed to generate report.")
+
+    print(f"\n=== SALES CALL PREPARATION: {args.name} at {agency} ===\n")
+    
     points = []
     for line in final_summary.split('\n'):
         line = line.strip()
@@ -697,16 +723,8 @@ def main():
                 points.append(content)
         elif line not in points:  # For non-bullet text
             points.append(line)
-
-    print(f"\n=== SALES CALL PREPARATION: {args.name} at {agency} ===\n")
-    if points:
-        for i, point in enumerate(points, 1):
-            print(f"{i}. {point}")
-    else:
-        print("No specific information found.")
-    
     # Generate final PDF with USASpending analysis
-    pdf_path = generate_report_file(final_summary, args.name, agency, "final", usaspending)
+    # pdf_path = generate_report_file(final_summary, args.name, agency, "final", usaspending)
 
 if __name__ == "__main__":
     main()
