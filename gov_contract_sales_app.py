@@ -358,20 +358,49 @@ def gather_information(name: str, agency: str) -> str:
 
 def generate_summary(context: str, name: str, agency: str) -> str:
     """Generate initial summary from gathered context."""
-    prompt = (
-        f"Using the following scraped information about {name} from {agency},\n"
-        "craft a document summarizing what a salesperson should know before a call.\n"
-        "Ensure each point is on a new line and separated by a blank line for clear readability.\n"
-        "Include details on their technical background, past contracts, and specific projects if available.\n"
-        "Place the source link with the Title immediately below the related detail using markdown formatting for hyperlinks. Italicize links.\n"
-        "Do not use language that is unclear or ambiguous (ex. 'likely').\n"
-        "Ensure Diversified Sources – don't just use one."
-        "Shy away from overly complicated language. Be direct and concise, with information that would actually be valuable for sales (not fluff).\n"
-        "Prioritize actionable insights and distinguishing traits about the individual.\n"
-        "Mention managers, collaborators, or support staff when referenced in the sources.\n"
-        "Avoid broad statements or givens that are too general.\n"
-        "Information:\n" + context
-    )
+    # prompt = (
+    #     f"Using the following scraped information about {name} from {agency},\n"
+    #     "craft a document summarizing what a salesperson should know before a call.\n"
+    #     "Ensure each point is on a new line and separated by a blank line for clear readability.\n"
+    #     "Include details on their technical background, past contracts, and specific projects if available.\n"
+    #     "Place the source link with the Title immediately below the related detail using markdown formatting for hyperlinks. Italicize links.\n"
+    #     "Do not use language that is unclear or ambiguous (ex. 'likely').\n"
+    #     "Ensure Diversified Sources – don't just use one."
+    #     "Shy away from overly complicated language. Be direct and concise, with information that would actually be valuable for sales (not fluff).\n"
+    #     "Prioritize actionable insights and distinguishing traits about the individual.\n"
+    #     "Mention managers, collaborators, or support staff when referenced in the sources.\n"
+    #     "Avoid broad statements or givens that are too general.\n"
+    #     "Information:\n" + context
+    # )
+
+    prompt = f"""
+    You are an intelligence agent generating a briefing on {name} from {agency}.
+
+    Your goal is to produce a short, highly specific profile for a salesperson preparing for a call. This is not a biography. This is tactical pre-call intel.
+
+        ## Instructions:
+        - Focus on what this person has **done**: projects, technologies, contracts, teams.
+        - Pull **concrete details**: systems worked on, budget responsibilities, transformation efforts, orgs partnered with.
+        - Include **contextual hooks** for outreach: problems they’re tackling, tools they’ve deployed, initiatives they’re leading.
+        - If they mention other people (collaborators, managers, execs), **note those relationships**.
+        - For each fact or insight, include the **source title** with a **Markdown-style italicized link** on the next line. Like this:  
+        _[Source Title](https://example.com)_
+
+        ## Formatting:
+        - Use **one short paragraph or bullet per insight**, each separated by a blank line.
+        - Avoid generic traits like “thought leader” or “focuses on strategy” unless tied to a specific program or output.
+        - Never use hedging language like “likely,” “seems to,” “might be involved.”
+        - Do **not** repeat information or list general credentials unless they relate to actual influence.
+
+        ## Your Output:
+        Begin with a brief markdown heading:
+
+        Then proceed with your insights.
+
+        ## Raw Information:
+        {context}
+    """
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -529,15 +558,16 @@ def review_and_improve_summary(initial_summary: str, name: str, agency: str, con
 # ==============================================================================
 
 def generate_pdf_report(summary: str, name: str, agency: str, output_path: str = "sales_report.pdf", 
-                        usaspending_analysis: str = None) -> str:
+                        usaspending_analysis: str = None, linkedin_summary: str = None) -> str:
     """Generate a formatted PDF report using Playwright and Tailwind CSS.
     
     Args:
-        summary: Main summary content (now includes LinkedIn data)
+        summary: Main summary content
         name: Person's name
         agency: Agency name
         output_path: Path for output PDF
         usaspending_analysis: Optional USASpending LLM analysis in markdown format
+        linkedin_summary: Optional LinkedIn summary in markdown format
     """
 
     import markdown
@@ -548,6 +578,11 @@ def generate_pdf_report(summary: str, name: str, agency: str, output_path: str =
     usaspending_html = ""
     if usaspending_analysis:
         usaspending_html = markdown.markdown(usaspending_analysis, extensions=['extra'])
+        
+    # Convert LinkedIn summary to HTML if provided
+    linkedin_html = ""
+    if linkedin_summary:
+        linkedin_html = markdown.markdown(linkedin_summary, extensions=['extra'])
 
     tailwind_html = f"""
         <!DOCTYPE html>
@@ -571,6 +606,15 @@ def generate_pdf_report(summary: str, name: str, agency: str, output_path: str =
                 {summary_html}
             </div>
             </div>
+            
+            {f'''
+            <div class="bg-green-50 rounded-lg p-6 mb-8">
+            <h3 class="text-xl font-semibold text-green-800 mb-4">Public Snapshot</h3>
+            <div class="space-y-2">
+                {linkedin_html}
+            </div>
+            </div>
+            ''' if linkedin_summary else ''}
             
             {f'''
             <div class="bg-blue-50 rounded-lg p-6 mb-8">
@@ -621,7 +665,7 @@ def generate_pdf_report(summary: str, name: str, agency: str, output_path: str =
 
 
 def generate_report_file(final_summary: str, name: str, agency: str, tag: str = "", 
-                        usaspending_analysis: str = None) -> str:
+                        usaspending_analysis: str = None, linkedin_summary: str = None) -> str:
     """Generate PDF report file from the final summary.
 
     Args:
@@ -630,6 +674,7 @@ def generate_report_file(final_summary: str, name: str, agency: str, tag: str = 
         agency: Agency name
         tag: Optional tag for filename
         usaspending_analysis: Optional USASpending LLM analysis in markdown format
+        linkedin_summary: Optional LinkedIn summary in markdown format
 
     Returns:
         str: Path to generated PDF file, or empty string if generation failed
@@ -639,7 +684,7 @@ def generate_report_file(final_summary: str, name: str, agency: str, tag: str = 
         return ""
 
     pdf_filename = f"{name.replace(' ', '_')}_{tag.replace(' ', '_')}_sales_report.pdf"
-    pdf_path = generate_pdf_report(final_summary, name, agency, pdf_filename, usaspending_analysis)
+    pdf_path = generate_pdf_report(final_summary, name, agency, pdf_filename, usaspending_analysis, linkedin_summary)
 
     if pdf_path:
         print(f"\n📄 PDF report generated: {pdf_path}")
@@ -654,7 +699,8 @@ def main():
         description="Generate one-pager for government contracting sales calls.")
     parser.add_argument("name", help="Individual's name")
     parser.add_argument("agency", help="Agency name")
-    parser.add_argument("bureau", help="Bureau/sub-agency name (optional)")
+    parser.add_argument("--bureau", help="Bureau/sub-agency name (optional)", default=None)
+    parser.add_argument("--bypass-linkedin", action="store_true", help="Bypass LinkedIn search and processing")
 
     args = parser.parse_args()
 
@@ -671,31 +717,47 @@ def main():
     summary = generate_summary(context, args.name, agency)
 
     usaspending = ""
+    # if args.bureau:
     usaspending = generate_usa_spending_analysis(agency, args.bureau)
+    # else:
+    #     logger.info("No bureau specified, skipping USASpending analysis")
 
-    # Process LinkedIn profile and endorsements
-    profile_agent = LinkedinProfileAgent("extracted_text/Profile.txt", args.name, agency)
-    profile_summary = profile_agent.process_profile()
+    # Process LinkedIn profile and endorsements (if not bypassed)
+    print(args.bypass_linkedin)
+    if not args.bypass_linkedin:
+        profile_agent = LinkedinProfileAgent("extracted_text/Profile.txt", args.name, agency)
+        profile_summary = profile_agent.process_profile()
 
-    endorsement_agent = LinkedinEndorsementAgent([
-        "extracted_text/skills.txt",
-        "extracted_text/skills-2.txt",
-        "extracted_text/skills-3.txt"
-    ], args.name, agency)
-    endorsement_summary = endorsement_agent.process_endorsements()
+        # Get list of available skills files
+        skill_files = [
+            "extracted_text/skills.txt",
+            "extracted_text/skills-2.txt", 
+            "extracted_text/skills-3.txt"
+        ]
+        existing_files = [f for f in skill_files if os.path.exists(f)]
+        
+        # Only process endorsements if skill files exist
+        if existing_files:
+            endorsement_agent = LinkedinEndorsementAgent(existing_files, args.name, agency)
+            endorsement_summary = endorsement_agent.process_endorsements()
+        else:
+            endorsement_summary = ""
+    else:
+        profile_summary = ""
+        endorsement_summary = ""
+        logger.info("LinkedIn processing bypassed")
 
-    full_report_content = f"{summary}\n\n{profile_summary}\n\n{endorsement_summary}"
-
-    report_path = generate_report_file(full_report_content, args.name, agency, "original", usaspending)
+    print("Endorsement Summary: ", endorsement_summary)
+    # report_path = generate_report_file(full_report_content, args.name, agency, "original", usaspending)
 
     final_summary = review_and_improve_summary(
         summary, args.name, agency, context)
 
-    # Combine all summaries for the final report
-    full_report_content = f"{final_summary}\n\n{profile_summary}\n\n{endorsement_summary}"
+    # Combine LinkedIn summaries
+    linkedin_content = f"{profile_summary}\n\n{endorsement_summary}"
 
     # Generate the final report file
-    report_path = generate_report_file(full_report_content, args.name, agency, "final", usaspending)
+    report_path = generate_report_file(final_summary, args.name, agency, "final", usaspending, linkedin_content)
 
     if report_path:
         print(f"\nReport saved to: {report_path}")

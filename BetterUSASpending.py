@@ -160,8 +160,8 @@ def generate_usa_spending_analysis(agency_name: str, bureau_name: str) -> str:
 
     while has_next and len(all_agency_data) < 50:
         agency_data = search_awards_by_agency(
-            agency_name="Department of Health and Human Services",
-        bureau_name="Office of the Inspector General",
+            agency_name=agency_name,
+        bureau_name=bureau_name,
             page=page
         )
 

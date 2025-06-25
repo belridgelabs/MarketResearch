@@ -2,6 +2,10 @@
 
 A Python application that generates comprehensive one-pagers for government contracting sales calls. The app researches individuals and their agencies using web scraping, LinkedIn data, and specialized government contracting sources like FedScoop and OrangeSlices, then creates both console output and formatted PDF reports.
 
+```python
+python3 /Users/nihalshah/Work/Personal/MarketResearch/gov_contract_sales_app.py "Steve Grunch" "Department of Homeland Security" "U.S. Citizenship and Immigration Services"
+ ```
+
 ## Features
 
 - **Multi-source Research**: Combines data from DuckDuckGo search, OpenAI, and Perplexity AI

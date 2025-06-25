@@ -102,6 +102,10 @@ def extract_linkedin_text(html_file_path, output_dir="extracted_text"):
             elif end_index is None:
                 end_index = i
                 break
+        if end_index is None:
+            if "More profiles for you" in line:
+                end_index = i
+                break
     
     # Extract and save the relevant portion if both markers are found
     output_path = os.path.join(output_dir, output_filename)

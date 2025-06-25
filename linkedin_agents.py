@@ -24,15 +24,33 @@ class LinkedinProfileAgent:
             elif self.name:
                 context_info = f" for {self.name}"
             
-            prompt = f"""This is {self.name}'s LinkedIn Profile. We want to know hyper-specific, key knowledge that would help us design a sales approach.
-            This should be immersive. Not a summary, but a commentary. However, organize it in a way that serves as a primer into the person and how we can approach them.
-            What technologies can we talk about? What experiences? What should we know about {self.name} that will give us a competitive advantage in the marketplace? Be HYPER SPECIFIC when suggesting an approach and do not generalize.
-            \n\n{profile_content}"""
+            # prompt = f"""This is {self.name}'s LinkedIn Profile. We want to know hyper-specific, key knowledge that would help us design a sales approach.
+            # This should be immersive. Not a summary, but a commentary. However, organize it in a way that serves as a primer into the person and how we can approach them. This should be relatively short.
+            # ***Include a few key potential conversation starter questions based on {self.name}'s experience and interests.
+            # What technologies can we talk about? What experiences? What should we know about {self.name} that will give us a competitive advantage in the marketplace? Be HYPER SPECIFIC when suggesting an approach and do not generalize.
+            # \n\n{profile_content}"""
             
+            prompt = f"""
+            This is {self.name}'s LinkedIn profile. Your task is to generate a **sales strategy briefing**.
+
+            Don't summarize — analyze. Treat this like a high-stakes pre-call readout. Highlight insights that will **shape how we approach {self.name}** as a potential buyer, champion, or stakeholder. Focus on **hyper-specific hooks** — experiences, technologies, roles, or phrases that signal pain points, interests, or strategic priorities.
+
+            Output should be structured and actionable. Include:
+            - A brief **persona snapshot** of {self.name} (tone, role, interests, background)
+            - **Three conversation starters** tailored to their background
+            - **Relevant technologies, methodologies, or tools** to bring up
+            - **Strategic insight**: What gives us a unique edge in engaging this person?
+            - **Two interesting pieces**: What would most people miss when looking into this person?
+
+            Avoid generic fluff. Think like a seller trying to win a deal. 
+
+            {profile_content}
+            """
+
             response = self.client.chat.completions.create(
                 model="gpt-4o", # You can choose a different model if preferred
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that summarizes LinkedIn profiles in Markdown format."},
+                    {"role": "system", "content": "You are a strategic sales assistant that analyzes LinkedIn profiles to generate actionable, hyper-specific insights. Your output is in Markdown format, structured to help a founder or seller prepare for a high-impact, personalized conversation. Focus on extracting unique hooks, relevant technologies, and sharp conversation starters based on the person's background. Avoid generic summaries."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=1500
